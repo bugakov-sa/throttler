@@ -29,6 +29,10 @@ public class ThrottlingController {
 
     private String getIp(HttpServletRequest request) {
         String header = request.getHeader("X-Forwarded-For");
-        return (header != null) ? header : "";
+        if(header != null) {
+            String[] parts = header.split("\\s*,\\s*");
+            return parts[0];
+        }
+        return request.getRemoteAddr();
     }
 }

@@ -44,7 +44,7 @@ class ThrottlingApplicationTests {
 
     @ParameterizedTest
     @ValueSource(strings = {"192.168.0.10", "192.168.0.11"})
-    void testThrottling1Thread2Intervals(String ip) throws Exception {
+    void test(String ip) throws Exception {
 
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.setClientHttpRequestInitializers(Collections.singletonList(
