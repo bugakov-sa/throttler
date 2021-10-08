@@ -1,16 +1,29 @@
 package test.task.throttling;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.web.client.ResponseErrorHandler;
+import org.springframework.web.client.RestTemplate;
 
-@SpringBootTest
+import java.io.IOException;
+import java.util.Collections;
+import java.util.stream.IntStream;
+
+import static java.lang.System.currentTimeMillis;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ThrottlingApplicationTests {
 
-    @Autowired
-    private ThrottlingController throttlingController;
+    private static final Logger log = LoggerFactory.getLogger(ThrottlingApplicationTests.class);
+
     @Value("${throttling.seconds}")
     private long throttlingSeconds;
     @Value("${throttling.requests}")
@@ -18,38 +31,80 @@ class ThrottlingApplicationTests {
     @Value("${throttling.resetMillis}")
     private long resetMillis;
 
-    @Test
-    void testThrottling1Thread2Intervals() throws InterruptedException {
+    @LocalServerPort
+    private int port;
 
-        int responsesTotal = 0;
-        int responses200PerFirstInterval = 0;
-        int responses502PerFirstInterval = 0;
-        int responses200PerSecondInterval = 0;
-        int responses502PerSecondInterval = 0;
+    private int getTestResponseCode(RestTemplate restTemplate) throws Exception {
+        ResponseEntity<String> response = restTemplate.getForEntity(
+                String.format("http://localhost:%d/test", port),
+                String.class
+        );
+        return response.getStatusCode().value();
+    }
 
-        long startMillis = System.currentTimeMillis();
-        for (int i = 0; i < throttlingRequests * 2; i++) {
-            int code = throttlingController.test().getStatusCode().value();
-            responsesTotal++;
-            switch (code) {
-                case 200 -> responses200PerFirstInterval++;
-                case 502 -> responses502PerFirstInterval++;
+    @ParameterizedTest
+    @ValueSource(strings = {"192.168.0.10", "192.168.0.11"})
+    void testThrottling1Thread2Intervals(String ip) throws Exception {
+
+        RestTemplate restTemplate = new RestTemplate();
+        restTemplate.setClientHttpRequestInitializers(Collections.singletonList(
+                request -> request.getHeaders().add("X-Forwarded-For", ip)
+        ));
+        restTemplate.setErrorHandler(new ResponseErrorHandler() {
+            @Override
+            public boolean hasError(ClientHttpResponse response) throws IOException {
+                return false;
+            }
+
+            @Override
+            public void handleError(ClientHttpResponse response) throws IOException {
+
+            }
+        });
+
+        String threadName = Thread.currentThread().getName();
+
+        final int intervalsCount = 3;
+        int[] response200Counts = new int[intervalsCount];
+        int response502Count = 0;
+        int responseTotalCount = 0;
+
+        long throttlingMillist = throttlingSeconds * 1000L;
+        long startMillis = currentTimeMillis();
+        int i = 0;
+
+        log.info("Starting interval 0 in thread/ip {}/{}", threadName, ip);
+        while (startMillis + intervalsCount * throttlingMillist > currentTimeMillis()) {
+            int code = getTestResponseCode(restTemplate);
+            responseTotalCount++;
+            if (code == 200) {
+                int newI = (int) ((currentTimeMillis() - startMillis) / throttlingMillist);
+                if (newI > i) {
+                    log.info("Starting interval {} in thread/ip {}/{}", newI, threadName, ip);
+                }
+                i = newI;
+                response200Counts[newI]++;
+            } else {
+                response502Count++;
             }
         }
-        Thread.sleep(throttlingSeconds * 1000L - (System.currentTimeMillis() - startMillis) + resetMillis);
-        for (int i = 0; i < throttlingRequests * 4; i++) {
-            int code = throttlingController.test().getStatusCode().value();
-            responsesTotal++;
-            switch (code) {
-                case 200 -> responses200PerSecondInterval++;
-                case 502 -> responses502PerSecondInterval++;
-            }
+
+        log.info("Finishing test in thread/ip {}/{}", threadName, ip);
+        for (int j = 0; j < intervalsCount; j++) {
+            Assertions.assertEquals(
+                    throttlingRequests,
+                    response200Counts[j],
+                    String.format(
+                            "Interval %d expected %d received %d",
+                            j,
+                            throttlingRequests,
+                            response200Counts[j]
+                    )
+            );
         }
-        Assertions.assertEquals(throttlingRequests, responses200PerFirstInterval);
-        Assertions.assertEquals(throttlingRequests, responses200PerSecondInterval);
         Assertions.assertEquals(
-                responses502PerFirstInterval + responses502PerSecondInterval,
-                responsesTotal - responses200PerFirstInterval - responses200PerSecondInterval
+                responseTotalCount - IntStream.of(response200Counts).sum(),
+                response502Count
         );
     }
 
