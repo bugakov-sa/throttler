@@ -49,15 +49,14 @@ class ThrottlingApplicationTests {
         final long startMillis = currentTimeMillis();
         int i = 0;
 
-        String threadName = Thread.currentThread().getName();
-        log.info("Starting interval 0 in thread/ip {}/{}", threadName, ip);
+        log.info("Starting interval 0 from ip {}", ip);
         while (startMillis + intervalsCount * throttlingMillist > currentTimeMillis()) {
             int code = getTestResponseCode(restTemplate);
             responseTotalCount++;
             if (code == 200) {
                 int newI = (int) ((currentTimeMillis() - startMillis) / throttlingMillist);
                 if (newI > i) {
-                    log.info("Starting interval {} in thread/ip {}/{}", newI, threadName, ip);
+                    log.info("Starting interval {}  from ip {}", newI, ip);
                 }
                 i = newI;
                 response200Counts[newI]++;
@@ -66,9 +65,9 @@ class ThrottlingApplicationTests {
             }
         }
 
-        log.info("Finishing test in thread/ip {}/{}", threadName, ip);
+        log.info("Finishing test from ip {}", ip);
         for (int j = 0; j < intervalsCount; j++) {
-            log.info("Interval {} ok responses {}", j, response200Counts[j]);
+            log.info("Interval {} ok responses {} from ip {}", j, response200Counts[j], ip);
             Assertions.assertEquals(
                     throttlingRequests,
                     response200Counts[j],
@@ -80,7 +79,7 @@ class ThrottlingApplicationTests {
                     )
             );
         }
-        log.info("Total responses {}", responseTotalCount);
+        log.info("Total responses {} from ip {}", responseTotalCount, ip);
         Assertions.assertEquals(
                 responseTotalCount - IntStream.of(response200Counts).sum(),
                 response502Count
