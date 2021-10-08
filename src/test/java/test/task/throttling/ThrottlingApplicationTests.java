@@ -34,45 +34,22 @@ class ThrottlingApplicationTests {
     @LocalServerPort
     private int port;
 
-    private int getTestResponseCode(RestTemplate restTemplate) {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-                String.format("http://localhost:%d/test", port),
-                String.class
-        );
-        return response.getStatusCode().value();
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {"192.168.0.10", "192.168.0.11"})
     void test(String ip) {
 
-        RestTemplate restTemplate = new RestTemplate();
-        restTemplate.setClientHttpRequestInitializers(Collections.singletonList(
-                request -> request.getHeaders().add("X-Forwarded-For", ip)
-        ));
-        restTemplate.setErrorHandler(new ResponseErrorHandler() {
-            @Override
-            public boolean hasError(ClientHttpResponse response) throws IOException {
-                return false;
-            }
-
-            @Override
-            public void handleError(ClientHttpResponse response) throws IOException {
-
-            }
-        });
-
-        String threadName = Thread.currentThread().getName();
+        RestTemplate restTemplate = getRestTemplate(ip);
 
         final int intervalsCount = 3;
         int[] response200Counts = new int[intervalsCount];
         int response502Count = 0;
         int responseTotalCount = 0;
 
-        long throttlingMillist = throttlingSeconds * 1000L;
-        long startMillis = currentTimeMillis();
+        final long throttlingMillist = throttlingSeconds * 1000L;
+        final long startMillis = currentTimeMillis();
         int i = 0;
 
+        String threadName = Thread.currentThread().getName();
         log.info("Starting interval 0 in thread/ip {}/{}", threadName, ip);
         while (startMillis + intervalsCount * throttlingMillist > currentTimeMillis()) {
             int code = getTestResponseCode(restTemplate);
@@ -106,6 +83,33 @@ class ThrottlingApplicationTests {
                 responseTotalCount - IntStream.of(response200Counts).sum(),
                 response502Count
         );
+    }
+
+    private int getTestResponseCode(RestTemplate restTemplate) {
+        ResponseEntity<String> response = restTemplate.getForEntity(
+                String.format("http://localhost:%d/test", port),
+                String.class
+        );
+        return response.getStatusCode().value();
+    }
+
+    private RestTemplate getRestTemplate(String ip) {
+        RestTemplate restTemplate = new RestTemplate();
+        restTemplate.setClientHttpRequestInitializers(Collections.singletonList(
+                request -> request.getHeaders().add("X-Forwarded-For", ip)
+        ));
+        restTemplate.setErrorHandler(new ResponseErrorHandler() {
+            @Override
+            public boolean hasError(ClientHttpResponse response) throws IOException {
+                return false;
+            }
+
+            @Override
+            public void handleError(ClientHttpResponse response) throws IOException {
+
+            }
+        });
+        return restTemplate;
     }
 
 }
