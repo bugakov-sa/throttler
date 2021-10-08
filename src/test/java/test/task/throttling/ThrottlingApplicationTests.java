@@ -34,7 +34,7 @@ class ThrottlingApplicationTests {
     @LocalServerPort
     private int port;
 
-    private int getTestResponseCode(RestTemplate restTemplate) throws Exception {
+    private int getTestResponseCode(RestTemplate restTemplate) {
         ResponseEntity<String> response = restTemplate.getForEntity(
                 String.format("http://localhost:%d/test", port),
                 String.class
@@ -44,7 +44,7 @@ class ThrottlingApplicationTests {
 
     @ParameterizedTest
     @ValueSource(strings = {"192.168.0.10", "192.168.0.11"})
-    void test(String ip) throws Exception {
+    void test(String ip) {
 
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.setClientHttpRequestInitializers(Collections.singletonList(
