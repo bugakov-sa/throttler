@@ -68,6 +68,7 @@ class ThrottlingApplicationTests {
 
         log.info("Finishing test in thread/ip {}/{}", threadName, ip);
         for (int j = 0; j < intervalsCount; j++) {
+            log.info("Interval {} ok responses {}", j, response200Counts[j]);
             Assertions.assertEquals(
                     throttlingRequests,
                     response200Counts[j],
@@ -79,6 +80,7 @@ class ThrottlingApplicationTests {
                     )
             );
         }
+        log.info("Total responses {}", responseTotalCount);
         Assertions.assertEquals(
                 responseTotalCount - IntStream.of(response200Counts).sum(),
                 response502Count
