@@ -64,10 +64,10 @@ public class SimpleThrottler implements Throttler {
         while (!newMetas.isEmpty()) {
             metas.add(newMetas.poll());
         }
-        for (int i = 0; i < metas.size(); i++) {
-            if (metas.get(i).isExpired()) {
-                metas.get(i).reset();
-                counters.get(metas.get(i).counterName).set(requestsCount);
+        for (CounterMeta meta : metas) {
+            if (meta.isExpired()) {
+                meta.reset();
+                counters.get(meta.counterName).set(requestsCount);
             }
         }
     }
