@@ -14,10 +14,12 @@ import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.stream.IntStream;
+import java.util.List;
 
 import static java.lang.System.currentTimeMillis;
+import static java.util.Collections.nCopies;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ThrottlingApplicationTests {
@@ -39,52 +41,43 @@ class ThrottlingApplicationTests {
     void test(String ip) {
 
         RestTemplate restTemplate = getRestTemplate(ip);
-
         final int intervalsCount = 3;
-        int[] response200Counts = new int[intervalsCount];
+        List<Integer> response200Counts = new ArrayList<>(nCopies(intervalsCount, 0));
         int response502Count = 0;
         int responseTotalCount = 0;
-
-        final long throttlingMillist = throttlingSeconds * 1000L;
         final long startMillis = currentTimeMillis();
-        int i = 0;
+        int oldI = -1;
 
-        log.info("Starting interval 0 from ip {}", ip);
-        while (startMillis + intervalsCount * throttlingMillist > currentTimeMillis()) {
+        for (int i = 0; i < intervalsCount; i = getIntervalIndex(startMillis)) {
+            if (i > oldI) {
+                log.info("Starting interval {}  from ip {}", i, ip);
+                oldI = i;
+            }
             int code = getTestResponseCode(restTemplate);
-            responseTotalCount++;
             if (code == 200) {
-                int newI = (int) ((currentTimeMillis() - startMillis) / throttlingMillist);
-                if (newI > i) {
-                    log.info("Starting interval {}  from ip {}", newI, ip);
-                }
-                i = newI;
-                response200Counts[newI]++;
+                response200Counts.set(i, response200Counts.get(i) + 1);
             } else {
                 response502Count++;
             }
+            responseTotalCount++;
         }
 
         log.info("Finishing test from ip {}", ip);
-        for (int j = 0; j < intervalsCount; j++) {
-            log.info("Interval {} ok responses {} from ip {}", j, response200Counts[j], ip);
-            Assertions.assertEquals(
-                    throttlingRequests,
-                    response200Counts[j],
-                    String.format(
-                            "Interval %d expected %d received %d",
-                            j,
-                            throttlingRequests,
-                            response200Counts[j]
-                    )
-            );
-        }
+        log.info("Ok responses {} from ip {}", response200Counts, ip);
         log.info("Total responses {} from ip {}", responseTotalCount, ip);
-        Assertions.assertEquals(
-                responseTotalCount - IntStream.of(response200Counts).sum(),
-                response502Count
-        );
+
+        List<Integer> expectedResponse200Counts = nCopies(intervalsCount, throttlingRequests);
+        Assertions.assertIterableEquals(expectedResponse200Counts, response200Counts);
+
+        int totalResponse200Count = response200Counts.stream().mapToInt(Integer::intValue).sum();
+        int expectedResponse502Count = responseTotalCount - totalResponse200Count;
+        Assertions.assertEquals(expectedResponse502Count, response502Count);
     }
+
+    private int getIntervalIndex(long startMillis) {
+        return (int) ((currentTimeMillis() - startMillis) / (throttlingSeconds * 1000L));
+    }
+
 
     private int getTestResponseCode(RestTemplate restTemplate) {
         ResponseEntity<String> response = restTemplate.getForEntity(

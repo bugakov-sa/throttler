@@ -1,6 +1,5 @@
 package test.task.throttling;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -11,6 +10,8 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static java.lang.System.currentTimeMillis;
 
 @Component
 public class SimpleThrottler implements Throttler {
@@ -26,11 +27,11 @@ public class SimpleThrottler implements Throttler {
 
         CounterMeta(String counterName) {
             this.counterName = counterName;
-            resetMillis = System.currentTimeMillis();
+            resetMillis = currentTimeMillis();
         }
 
         boolean isExpired() {
-            return resetMillis + intervalMillis <= System.currentTimeMillis();
+            return resetMillis + intervalMillis <= currentTimeMillis();
         }
 
         void reset() {
@@ -41,7 +42,6 @@ public class SimpleThrottler implements Throttler {
     private final Queue<CounterMeta> newMetas = new ConcurrentLinkedQueue<>();
     private final List<CounterMeta> metas = new ArrayList<>();
 
-    @Autowired
     public SimpleThrottler(
             @Value("${throttling.seconds:10}") int intervalSeconds,
             @Value("${throttling.requests:10}") int requestsCount) {
